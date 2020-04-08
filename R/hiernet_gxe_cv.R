@@ -2,7 +2,7 @@ library(parallel)
 library(dplyr)
 
 hierNet.gxe.cv = function(G, E, Y, GxE, nFolds=5, ncores=5,
-                          grid, max_iter=10000, tol=1e-3,
+                          grid, grid_size, max_iter=10000, tol=1e-3,
                           target_b_gxe_non_zero=NULL, 
                           working_set_min_size=100,
                           seed=2020){
@@ -13,6 +13,14 @@ hierNet.gxe.cv = function(G, E, Y, GxE, nFolds=5, ncores=5,
   folds = rep_len(1:nFolds, n)
   folds = sample(folds, n)
   
+  if (is.null(grid)) {
+    GxE_by_Yn_abs = abs(Y %*% GxE)[1,] / n
+    G_by_Yn_abs = abs(Y %*% G)[1,] / n     
+    lambda_max = max(c(G_by_Yn_abs, GxE_by_Yn_abs))
+    lambda_min = lambda_max * 1e-4
+    grid = 10^seq(log10(lambda_min), log10(lambda_max), length.out=grid_size)
+  } 
+
   df = do.call(rbind, mclapply(
     1:nFolds,
     function(i, ...) {
@@ -30,7 +38,7 @@ hierNet.gxe.cv = function(G, E, Y, GxE, nFolds=5, ncores=5,
       
       fit = hierNet.gxe.fit(G_train, E_train, Y_train, GxE_train,
                             G_valid, E_valid, Y_valid, GxE_valid,
-                            grid=grid, max_iter=max_iter, tol=tol,
+                            grid=grid, grid_size=grid_size, max_iter=max_iter, tol=tol,
                             target_lambdas=NULL,
                             working_set_min_size=working_set_min_size)
         

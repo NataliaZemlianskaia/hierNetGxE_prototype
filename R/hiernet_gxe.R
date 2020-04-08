@@ -12,7 +12,7 @@ linear.predictor = function(G, E, b_0, beta_G, beta_E, beta_GxE){
 
 hierNet.gxe.fit = function(G, E, Y, GxE, 
                            G_valid, E_valid, Y_valid, GxE_valid,
-                           grid, max_iter=10000, tol=1e-3,
+                           grid=NULL, grid_size=40, max_iter=10000, tol=1e-3,
                            target_lambdas=NULL,
                            working_set_min_size=100){
   active_set_tol = tol
@@ -41,9 +41,7 @@ hierNet.gxe.fit = function(G, E, Y, GxE,
   target_lambda_2 = NULL
   
   set.seed(1)
-  grid = sort(grid, decreasing=TRUE)
-  snake = TRUE
-
+  
   sum_E = sum(E)
   norm2_E = (E %*% E)[1,1]
   denominator_E = n * norm2_E - sum_E^2
@@ -77,9 +75,14 @@ hierNet.gxe.fit = function(G, E, Y, GxE,
   best_valid_loss = Inf
   GxE_by_Yn_abs = abs(Y %*% GxE)[1,] / n
   G_by_Yn_abs = abs(Y %*% G)[1,] / n
-  lambda_2_prev = max(GxE_by_Yn_abs)
-  lambda_1_prev = max(G_by_Yn_abs)
-  lambda_2_max = max(GxE_by_Yn_abs)
+
+  if (is.null(grid)) {
+    lambda_max = max(c(G_by_Yn_abs, GxE_by_Yn_abs))
+    lambda_min = 1e-4 * lambda_max
+    grid = 10^seq(log10(lambda_min), log10(lambda_max), length.out=grid_size)
+  } 
+  grid = sort(grid, decreasing=TRUE)
+  snake = TRUE  
   
   abs_res_by_G_are_uptodate = FALSE
   lambda_iter = 0
@@ -189,7 +192,6 @@ hierNet.gxe.fit = function(G, E, Y, GxE,
         } else {
           working_set = working_set[1:working_set_size]
         }
-        working_set_report = paste(working_set_report, '|', working_set_size, sep='')
         
         inner_dual_objective = -Inf
         inner_nu = NULL
@@ -303,9 +305,7 @@ hierNet.gxe.fit = function(G, E, Y, GxE,
                       rules_stat=rules_stat))
         }
       }
-      lambda_2_prev = lambda_2
     }
-    lambda_1_prev = lambda_1
   }
   return(list(path=path, result=target_result, train_loss=target_train_loss,
               lambda_1=target_lambda_1, lambda_2=target_lambda_2, rules_stat=rules_stat))
