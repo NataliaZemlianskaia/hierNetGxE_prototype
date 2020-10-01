@@ -1,8 +1,10 @@
 library(Rcpp)
 library(RcppEigen)
 
-sourceCpp("/home/zemlians@PREVMED.USC.EDU/FIGI/hierNetGxE/src/hiernet_gxe_bcd.cpp", 
+sourceCpp("/home/zemlians@PREVMED.USC.EDU/FIGI/hierNetGxE/src/hiernet_gxe_bcd.cpp",
           verbose=TRUE, rebuild=TRUE)
+#sourceCpp("/Users/nataliazemlianskaia/Desktop/hierNetGxE/src/hiernet_gxe_bcd.cpp",
+#          verbose=TRUE, rebuild=TRUE)
 
 linear.predictor = function(G, E, b_0, beta_G, beta_E, beta_GxE){
   f = b_0 + G %*% beta_G + beta_E * E + (G * E) %*% beta_GxE
@@ -142,6 +144,10 @@ hierNet.gxe.fit = function(G, E, Y, GxE,
         if (dual_objective_res > dual_objective) {
           dual_objective = dual_objective_res
           nu = nu_res
+        } else {
+          a = absVectorByMatrix(1, nu, G)
+          b = absVectorByMatrix(1, nu, GxE)
+          x_opt = 1
         }
         
         primal_objective = (res %*% res)[1,1] / (2 * n) + lambda_1 * sum(pmax(abs(b_g), abs(b_gxe))) + lambda_2 * sum(abs(b_gxe))
@@ -157,7 +163,7 @@ hierNet.gxe.fit = function(G, E, Y, GxE,
         
         safe_set_zero = pmax(0, nu_by_GxE - lambda_2) < lambda_1 - nu_by_G
         SAFE_set_gxe = SAFE_set_gxe & !safe_set_zero & (nu_by_GxE >= lambda_2)
-        SAFE_set_g = SAFE_set_g & !safe_set_zero & ((nu_by_G >= lambda_1) | SAFE_set_gxe)  
+        SAFE_set_g = SAFE_set_g & !safe_set_zero & ((nu_by_G >= lambda_1) | SAFE_set_gxe)
         
         update_to_zero_b_gxe = (1:p)[(b_gxe != 0) & (!SAFE_set_gxe)]
         if (length(update_to_zero_b_gxe) > 0) {
@@ -182,8 +188,8 @@ hierNet.gxe.fit = function(G, E, Y, GxE,
         
         if (i_outter >= 2) {
           working_set_size = 2 * working_set_size
-          d_j[(b_g != 0) | (b_gxe != 0)] = -Inf
         }
+        d_j[(b_g != 0) | (b_gxe != 0)] = -Inf
         d_j[!SAFE_set_g] = Inf
         working_set = sort(d_j, index.return=TRUE)$ix
         working_set = working_set[SAFE_set_g[working_set]]
@@ -192,19 +198,24 @@ hierNet.gxe.fit = function(G, E, Y, GxE,
         } else {
           working_set = working_set[1:working_set_size]
         }
-        
+
         inner_dual_objective = -Inf
         inner_nu = NULL
 
         G_working_set = G[,working_set]
         GxE_working_set = GxE[,working_set]
+
+        not_working_set = setdiff(1:p, working_set)
+        stopifnot(sum(abs(b_g[not_working_set])) == 0)
+        stopifnot(sum(abs(b_gxe[not_working_set])) == 0)
+
         abs_res_by_G_div_n_working_set = rep(0, working_set_size)
         abs_res_by_GxE_div_n_working_set = rep(0, working_set_size)
         
         active_set = as.integer(rep(0, p))
         
         current_active_set_tol = active_set_tol
-        
+
         for (i_inner in 1:max_iter) {
           res = res + b_0 + E*b_e; b_0_old = b_0; b_e_old = b_e; sum_res = sum(res)
           b_e = (n * (E %*% res)[1,1] - sum_E * sum_res) / denominator_E
@@ -232,7 +243,7 @@ hierNet.gxe.fit = function(G, E, Y, GxE,
           x_opt = ifelse(abs(x_hat) <= M, x_hat, sign(x_hat) * M)
           inner_nu_res = x_opt * inner_nu_prev
           inner_dual_objective_res = (n/2) * (norm2_Y_div_n2 - sum((Y / n - inner_nu_res)^2))
-          
+
           if (inner_dual_objective_res > inner_dual_objective) {
             inner_dual_objective = inner_dual_objective_res
             inner_nu = inner_nu_res
@@ -240,6 +251,10 @@ hierNet.gxe.fit = function(G, E, Y, GxE,
           
           primal_objective = (res %*% res)[1,1] / (2 * n) + lambda_1 * sum(pmax(abs(b_g[working_set]), abs(b_gxe[working_set]))) + lambda_2 * sum(abs(b_gxe[working_set]))
           inner_dual_gap = primal_objective - inner_dual_objective
+          if (current_active_set_tol < 1e-29) {
+            browser()
+          }
+
           if (inner_dual_gap < tol) {
             break
           } else {
@@ -287,17 +302,18 @@ hierNet.gxe.fit = function(G, E, Y, GxE,
         valid_loss = 0
       }
       
+      train_loss = (res %*% res)[1,1] / (2 * n) + lambda_1 * sum(pmax(abs(b_g), abs(b_gxe))) + lambda_2 * sum(abs(b_gxe))
       path[nrow(path) + 1,] = list(lambda_1=lambda_1,
                                    lambda_2=lambda_2,
                                    valid_loss=valid_loss,
-                                   train_loss=(res %*% res)[1,1] / (2 * n) + lambda_1 * sum(pmax(abs(b_g), abs(b_gxe))) + lambda_2 * sum(abs(b_gxe)),
+                                   train_loss=train_loss,
                                    b_g_non_zero=sum(b_g != 0),
                                    b_gxe_non_zero=sum(b_gxe != 0))
       
       if (!is.null(target_lambdas)) {
         if (lambda_1 == target_lambdas$lambda_1 && lambda_2 == target_lambdas$lambda_2) {
           target_result = result
-          target_train_loss = mean(res^2) / 2
+          target_train_loss = train_loss
           target_lambda_1 = lambda_1
           target_lambda_2 = lambda_2
           return(list(path=path, result=target_result, train_loss=target_train_loss,
