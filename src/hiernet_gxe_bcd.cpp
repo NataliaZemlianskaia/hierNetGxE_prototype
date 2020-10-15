@@ -1,10 +1,8 @@
 // [[Rcpp::depends(RcppEigen)]]
-// [[Rcpp::plugins(openmp)]]
 
 #include <cmath>
 #include <algorithm>
 #include <vector>
-#include <omp.h>
 #include <Rcpp.h>
 #include <RcppEigen.h>
 

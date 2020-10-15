@@ -88,18 +88,15 @@ hier_linear_regression_e = function(p, q, xx, y, lambda_1, lambda_3, penalty, hi
     obj = loss + lasso_reg(theta, lambda_1) + l12_reg(beta_x, beta_e, theta, lambda_1)
   }
   
-  #prob = Problem(Minimize(obj))#, constraints = constraint1)
-  constraint1 = list(beta_x[16] == 0.01353009, theta[16, 1] == 0)
-  prob = Problem(Minimize(obj), constraints = constraint1)
-  
-  
+  prob = Problem(Minimize(obj))
+  #constraint1 = list(beta_x[16] == 0.01353009, theta[16, 1] == 0)
+  #prob = Problem(Minimize(obj), constraints = constraint1)
   #result = solve(prob, "SCS", ignore_dcp=TRUE)
   #result = solve(prob, ignore_dcp=TRUE)
-  result = solve(prob, ignore_dcp=TRUE, verbose=TRUE, abstol=1e-8, reltol=1e-8, feastol=1e-8, max_iter=20000)
+  result = solve(prob, ignore_dcp=TRUE, verbose=TRUE, abstol=1e-9, reltol=1e-9, feastol=1e-9, max_iter=20000)
   beta_x = result$getValue(beta_x)
   beta_e = result$getValue(beta_e)
   beta_0 = result$getValue(beta_0)
-  beta_main = c(beta_x, beta_e)
   beta_interaction = result$getValue(theta)
   #if (hierarchy == "strong"){
   #  beta_interaction = result$getValue(theta)
@@ -107,10 +104,16 @@ hier_linear_regression_e = function(p, q, xx, y, lambda_1, lambda_3, penalty, hi
   #if (hierarchy == "weak"){
   #  beta_interaction = (result$getValue(theta) + t(result$getValue(theta)))/2
   #}
-  return(list(beta_0=beta_0, beta_main=beta_main, beta_x=beta_x, beta_e=beta_e, beta_interaction=beta_interaction, value=result$value))
+  return(list(beta_0=beta_0, beta_x=beta_x, beta_e=beta_e, beta_interaction=beta_interaction, value=result$value))
 }
 
-cvxr_res = hier_linear_regression_e(p, 1,
-                                    cbind(dataset$G_train, dataset$E_train, dataset$GxE_train),
-                                    dataset$Y_train,
-                                    target_lambdas$lambda_2, target_lambdas$lambda_1, penalty="hierNet2", hierarchy="strong")
+cvxr_res = hier_linear_regression_e(dim(data$G_train)[2], 1,
+                                    cbind(data$G_train, data$E_train, data$GxE_train),
+                                    data$Y_train,
+                                    1e-4, 1e-4, penalty="hierNet2", hierarchy="strong")
+
+cvxr_res
+
+library(glmnet)
+glmnet_res = glmnet(x=cbind(data$G_train, data$E_train, data$GxE_train),y=data$Y_train)
+

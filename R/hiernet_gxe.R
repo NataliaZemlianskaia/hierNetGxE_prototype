@@ -3,7 +3,7 @@ library(RcppEigen)
 
 sourceCpp("/home/zemlians@PREVMED.USC.EDU/FIGI/hierNetGxE/src/hiernet_gxe_bcd.cpp",
           verbose=TRUE, rebuild=TRUE)
-#sourceCpp("/Users/nataliazemlianskaia/Desktop/hierNetGxE/src/hiernet_gxe_bcd.cpp",
+#sourceCpp("/Users/nataliazemlianskaia/Desktop/hierNetGxE_old/src/hiernet_gxe_bcd.cpp",
 #          verbose=TRUE, rebuild=TRUE)
 
 linear.predictor = function(G, E, b_0, beta_G, beta_E, beta_GxE){
@@ -113,6 +113,8 @@ hierNet.gxe.fit = function(G, E, Y, GxE,
       case_3_E = G_by_GxE_div_n * (lambda_1 - lambda_2)
       case_3_F = lambda_1 * b_gxe_denumerator - lambda_2 * norm2_G_div_n
       
+      working_set = c()
+
       for (i_outter in 1:max_iter) {
         res = res + b_0 + E*b_e; b_0_old = b_0; b_e_old = b_e; sum_res = sum(res)
         b_e = (n * (E %*% res)[1,1] - sum_E * sum_res) / denominator_E
@@ -159,6 +161,7 @@ hierNet.gxe.fit = function(G, E, Y, GxE,
         r = sqrt(2 * dual_gap / n)
         nu_by_GxE = abs(x_opt) * b + r * norm_GxE
         nu_by_G = abs(x_opt) * a + r * norm_G
+
         d_j = (lambda_1 - lambda_2 - abs(x_opt) * a - pmax(lambda_2 - r * norm_GxE, abs(x_opt) * b)) / (norm_GxE + norm_G)
         
         safe_set_zero = pmax(0, nu_by_GxE - lambda_2) < lambda_1 - nu_by_G
@@ -198,6 +201,7 @@ hierNet.gxe.fit = function(G, E, Y, GxE,
         } else {
           working_set = working_set[1:working_set_size]
         }
+        working_set = sort(working_set)
 
         inner_dual_objective = -Inf
         inner_nu = NULL
@@ -262,7 +266,7 @@ hierNet.gxe.fit = function(G, E, Y, GxE,
               current_active_set_tol = current_active_set_tol / 10
             }
           }
-          
+
           current_diff = CoordDescendStep(
             n, lambda_1, lambda_2,
             G, E, GxE, res,
@@ -276,7 +280,6 @@ hierNet.gxe.fit = function(G, E, Y, GxE,
             working_set, active_set, current_active_set_tol)
           max_diff = max(max_diff, current_diff)
           b_0 = b_0_vector[1]; b_e = b_e_vector[1]; 
-
           abs_res_by_G_are_uptodate = abs_res_by_G_are_uptodate && (max_diff > 0)
         }
         if (i_inner >= max_iter) {
@@ -286,7 +289,7 @@ hierNet.gxe.fit = function(G, E, Y, GxE,
       rules_stat[nrow(rules_stat) + 1,] = list(lambda_iter,
                                                sum(!SAFE_set_g),
                                                sum(!SAFE_set_gxe),
-                                               working_set_size,
+                                               length(working_set),
                                                sum(b_g != 0),
                                                sum(b_gxe != 0),
                                                lambda_1,
@@ -301,7 +304,7 @@ hierNet.gxe.fit = function(G, E, Y, GxE,
       } else {
         valid_loss = 0
       }
-      
+
       train_loss = (res %*% res)[1,1] / (2 * n) + lambda_1 * sum(pmax(abs(b_g), abs(b_gxe))) + lambda_2 * sum(abs(b_gxe))
       path[nrow(path) + 1,] = list(lambda_1=lambda_1,
                                    lambda_2=lambda_2,
@@ -309,7 +312,7 @@ hierNet.gxe.fit = function(G, E, Y, GxE,
                                    train_loss=train_loss,
                                    b_g_non_zero=sum(b_g != 0),
                                    b_gxe_non_zero=sum(b_gxe != 0))
-      
+
       if (!is.null(target_lambdas)) {
         if (lambda_1 == target_lambdas$lambda_1 && lambda_2 == target_lambdas$lambda_2) {
           target_result = result
